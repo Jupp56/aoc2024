@@ -35,69 +35,62 @@ fn part_1(input: &str) {
 }
 
 enum State {
+    /// No dont encountered
     Start,
+    /// Dont encountered before - only parse do at this point
+    StartDont,
+    /// "m"
     M,
-    U,
-    L,
-    MulBrackO,
+    /// "mu"
+    Mu,
+    /// "mul"
+    Mul,
+    /// "mul("
+    MulBracket,
+    /// "mul(<number>", where number has up to three digits already
     FirstNumber,
+    /// "mul(<number>,"
     Comma,
+    /// "mul(<number>,<othernumber>", where othernumber has up to three digits already
     SecondNumber,
-    D,
-    Do,
-    DoBrackO,
+    /// "d"
+    DFromStart,
+    /// "do"
+    DoFromStart,
+    /// "do("
+    DoBracketFromStart,
+    /// encountered a "d," but from StartDont. We need to return to StartDont and only consider "do()" from here
+    DFromStartDont,
+    /// encountered a "do," but from StartDont. We need to return to StartDont and only consider "do()" from here
+    DoFromStartDont,
+    /// encountered a "do(" , but from StartDont.We need to return to StartDont.
+    DoBracketFromStartDont,
+    /// "don"
     Don,
+    /// "don'"
     DonH,
+    /// "don't"
     DonHt,
+    /// "don't("
     DonHtBrackO,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-enum Instruction {
-    Mul(u32, u32),
-    Do,
-    Dont,
-}
-
-const NUMBERS: [char; 10] = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'];
-
 fn part_2(input: &str) {
     let start = Instant::now();
-    let instructions = parse_instructions(input);
-
-    let mut total = 0;
-    let mut muls_active = true;
-    for instruction in instructions {
-        match instruction {
-            Instruction::Mul(a, b) => {
-                if muls_active {
-                    total += a * b;
-                }
-            }
-            Instruction::Do => {
-                muls_active = true;
-            }
-            Instruction::Dont => {
-                muls_active = false;
-            }
-        }
-    }
-
-    let end = Instant::now();
-    println!("Part 2 took: {}", (end - start).as_micros());
-    println!("Total part 2: {total}");
-}
-
-fn parse_instructions(input: &str) -> Vec<Instruction> {
-    let mut instructions = Vec::new();
-
     let mut state = State::Start;
 
     let mut first_number = 0;
     let mut second_number = 0;
     let mut num_digits = 0;
 
+    let mut total = 0;
+
+    // Iterate over the chars from the input
     for token in input.chars() {
+        // If an expression we were in did not complete, we can try again from Start or StartDont via continue, as to not lose a token.
+        // Example: take the expression "domul(2,3)". We do not match '(' or 'n' after the "do", because we find 'm'.
+        // If it were not for this loop, we would stop processing the 'm' and continue with 'u' and we would loose the mul(2,3) expression.
+        // There is a break statement at the end, so if we dont manually continue, we dont loop.
         loop {
             match state {
                 State::Start => match token {
@@ -105,49 +98,54 @@ fn parse_instructions(input: &str) -> Vec<Instruction> {
                         state = State::M;
                     }
                     'd' => {
-                        state = State::D;
+                        state = State::DFromStart;
                     }
                     _ => {}
                 },
+                State::StartDont => {
+                    if token == 'd' {
+                        state = State::DFromStartDont;
+                    }
+                }
                 State::M => {
                     if token == 'u' {
-                        state = State::U;
+                        state = State::Mu;
                     } else {
                         state = State::Start;
                         continue;
                     }
                 }
-                State::U => {
+                State::Mu => {
                     if token == 'l' {
-                        state = State::L;
+                        state = State::Mul;
                     } else {
                         state = State::Start;
                         continue;
                     }
                 }
-                State::L => {
+                State::Mul => {
                     if token == '(' {
-                        state = State::MulBrackO;
+                        state = State::MulBracket;
                     } else {
                         state = State::Start;
                         continue;
                     }
                 }
-                State::MulBrackO => {
-                    if NUMBERS.contains(&token) {
+                State::MulBracket => {
+                    if is_number(token) {
                         state = State::FirstNumber;
                         num_digits = 1;
-                        first_number += str::parse::<u32>(&token.to_string()).unwrap();
+                        first_number += token as u32 - 48
                     } else {
                         state = State::Start;
                         continue;
                     }
                 }
                 State::FirstNumber => {
-                    if num_digits < 3 && NUMBERS.contains(&token) {
+                    if num_digits < 3 && is_number(token) {
                         num_digits += 1;
                         first_number *= 10;
-                        first_number += str::parse::<u32>(&token.to_string()).unwrap();
+                        first_number += token as u32 - 48
                     } else if token == ',' {
                         state = State::Comma;
                         num_digits = 0;
@@ -159,10 +157,10 @@ fn parse_instructions(input: &str) -> Vec<Instruction> {
                     }
                 }
                 State::Comma => {
-                    if NUMBERS.contains(&token) {
+                    if is_number(token) {
                         state = State::SecondNumber;
                         num_digits = 1;
-                        second_number += str::parse::<u32>(&token.to_string()).unwrap();
+                        second_number += token as u32 - 48
                     } else {
                         first_number = 0;
                         num_digits = 0;
@@ -171,14 +169,14 @@ fn parse_instructions(input: &str) -> Vec<Instruction> {
                     }
                 }
                 State::SecondNumber => {
-                    if num_digits < 3 && NUMBERS.contains(&token) {
+                    if num_digits < 3 && is_number(token) {
                         num_digits += 1;
                         second_number *= 10;
-                        second_number += str::parse::<u32>(&token.to_string()).unwrap();
+                        second_number += token as u32 - 48
                     } else if token == ')' {
                         state = State::Start;
                         num_digits = 0;
-                        instructions.push(Instruction::Mul(first_number, second_number));
+                        total += first_number * second_number;
                         first_number = 0;
                         second_number = 0;
                     } else {
@@ -189,32 +187,55 @@ fn parse_instructions(input: &str) -> Vec<Instruction> {
                         continue;
                     }
                 }
-                State::D => {
-                    if token == 'o' {
-                        state = State::Do;
-                    } else {
-                        state = State::Start;
-                        continue;
-                    }
+                State::DFromStart if token == 'o' => {
+                    state = State::DoFromStart;
                 }
-                State::Do => match token {
+                State::DFromStart => {
+                    state = State::Start;
+                    continue;
+                }
+                State::DoFromStart => match token {
                     'n' => {
                         state = State::Don;
                     }
                     '(' => {
-                        state = State::DoBrackO;
+                        state = State::DoBracketFromStart;
                     }
                     _ => {
                         state = State::Start;
                         continue;
                     }
                 },
-                State::DoBrackO => {
+                State::DoBracketFromStart => {
                     if token == ')' {
                         state = State::Start;
-                        instructions.push(Instruction::Do);
                     } else {
                         state = State::Start;
+                        continue;
+                    }
+                }
+                State::DFromStartDont => {
+                    if token == 'o' {
+                        state = State::DoFromStartDont;
+                    } else {
+                        state = State::StartDont;
+                        continue;
+                    }
+                }
+                State::DoFromStartDont => match token {
+                    '(' => {
+                        state = State::DoBracketFromStartDont;
+                    }
+                    _ => {
+                        state = State::StartDont;
+                        continue;
+                    }
+                },
+                State::DoBracketFromStartDont => {
+                    if token == ')' {
+                        state = State::Start;
+                    } else {
+                        state = State::StartDont;
                         continue;
                     }
                 }
@@ -244,8 +265,7 @@ fn parse_instructions(input: &str) -> Vec<Instruction> {
                 }
                 State::DonHtBrackO => {
                     if token == ')' {
-                        instructions.push(Instruction::Dont);
-                        state = State::Start;
+                        state = State::StartDont;
                     } else {
                         state = State::Start;
                         continue;
@@ -256,5 +276,14 @@ fn parse_instructions(input: &str) -> Vec<Instruction> {
             break;
         }
     }
-    instructions
+
+    let end = Instant::now();
+    println!("Part 2 took: {}", (end - start).as_micros());
+
+    println!("Total part 2: {total}");
+}
+
+#[inline]
+fn is_number(c: char) -> bool {
+    c as u32 >= 48 && c as u32 <= 57
 }
