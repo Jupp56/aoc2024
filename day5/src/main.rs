@@ -56,15 +56,12 @@ fn part_2(rules: &[(u32, u32)], updates: Vec<Vec<u32>>) {
     for mut update in updates {
         let mut marked_wrong = false;
         for rule in rules {
-            if update.contains(&rule.0)
-                && update.contains(&rule.1)
-                && update.iter().position(|x| x == &rule.0).unwrap()
-                    > update.iter().position(|x| x == &rule.1).unwrap()
+            if update_wrong(&update, rule)
             {
                    update.sort_by(|a, b| {
-                    if rules.iter().any(|(f, s)| f == a && s == b) {
+                    if rules.iter().any(|(first, second)| first == a && second == b) {
                         Ordering::Greater
-                    } else if rules.iter().any(|(f, s)| f == b && s == a) {
+                    } else if rules.iter().any(|(first, second)| first == b && second == a) {
                         Ordering::Less
                     } else {
                         Ordering::Equal
